@@ -1,0 +1,38 @@
+<configuration>
+    <appender name="FILE" class="ch.qos.logback.classic.sift.SiftingAppender">
+        <discriminator>
+            <key>logName</key>
+            <defaultValue>zebra-proxy-app</defaultValue>
+        </discriminator>
+        <sift>
+            <appender name="FILE-${logName}" class="ch.qos.logback.core.rolling.RollingFileAppender">
+                <file>data/logs/${logName}.log</file>
+                <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
+                    <pattern>%d [%thread] %-5level %mdc %logger{96}.%M\(line: %line\) - %msg%n</pattern>
+                </encoder>
+                <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+                    <fileNamePattern>data/logs/${logName}-%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+                    <maxFileSize>32MB</maxFileSize>
+                    <maxHistory>28</maxHistory>
+                    <totalSizeCap>16GB</totalSizeCap>
+                </rollingPolicy>
+            </appender>
+        </sift>
+    </appender>
+
+    <root level="ALL">
+        <appender-ref ref="FILE"/>
+    </root>
+
+    <include resource="org/springframework/boot/logging/logback/base.xml"/>
+    <logger name="org.springframework" level="INFO"/>
+    <logger name="org.eclipse.jetty" level="INFO"/>
+    <logger name="org.jooq" level="DEBUG"/>
+    <logger name="org.jooq.tools.LoggerListener" level="DEBUG"/>
+    <logger name="net.furizon" level="TRACE"/>
+    <logger name="org.zalando.logbook.Logbook" level="TRACE"/>
+    <logger name="org.springframework.web.client" level="TRACE"/>
+    <logger name="org.apache.hc.client5" level="INFO"/>
+    <logger name="org.hibernate.SQL" level="DEBUG" />
+    <logger name="org.hibernate.type" level="TRACE" />
+</configuration>

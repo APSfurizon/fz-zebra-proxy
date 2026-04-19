@@ -1,0 +1,17 @@
+package net.furizon.zebra_proxy.infrastructure.security;
+
+public enum AuthenticationCodes {
+    EMAIL_ALREADY_REGISTERED,
+    EMAIL_NOT_REGISTERED,
+    EMAIL_INVALID,
+    INVALID_CREDENTIALS,
+    AUTHENTICATION_IS_DISABLED,
+    CONFIRMATION_NOT_FOUND,
+    CONFIRMATION_SUCCESSFUL,
+    CONFIRMATION_STILL_PENDING,
+    ALREADY_LOGGED_IN,
+    PW_RESET_STILL_PENDING,
+    PW_RESET_NOT_FOUND,
+    PW_CHAGE_SAME_PASSWORD,
+    SESSION_NOT_YOURS, // Someone tried deleting someone else's session
+}
