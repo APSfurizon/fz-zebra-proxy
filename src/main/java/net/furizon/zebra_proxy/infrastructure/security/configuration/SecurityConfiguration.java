@@ -32,7 +32,7 @@ public class SecurityConfiguration {
     @Bean
     public SecurityFilterChain internalFilterChain(HttpSecurity http) throws Exception {
         return http
-                .securityMatcher("/job/**")
+                .securityMatcher("/print/**")
                 .cors(AbstractHttpConfigurer::disable)
                 .csrf(CsrfConfigurer::disable)
                 .addFilterAt(
@@ -54,6 +54,7 @@ public class SecurityConfiguration {
                         .requestMatchers(
                                 antMatcher(HttpMethod.GET, "/docs/**"),
                                 antMatcher(HttpMethod.GET, "/swagger-ui/**")
+                                //antMatcher(HttpMethod.GET, "/print/**")
                         )
                         .permitAll()
                         .anyRequest()
