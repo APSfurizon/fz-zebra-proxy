@@ -40,5 +40,9 @@ springdoc:
   swagger-ui:
     enabled: ${DOCS_ENABLED:false}
 
+webdriver:
+  chromedriver-path: ${WEBDRIVER_CHROMEDRIVER_PATH:}
+  chrome-binary-path: ${WEBDRIVER_CHROME_BINARY_PATH:}
+
 worker:
   delay: ${WORKER_DELAY_SECS:20}

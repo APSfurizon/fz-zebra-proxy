@@ -37,6 +37,7 @@
 		<paseto4j.version>2024.3</paseto4j.version>
 		<com.github.ben-manes.caffeine.version>3.2.3</com.github.ben-manes.caffeine.version>
 		<uuid.creator.version>6.0.0</uuid.creator.version>
+		<selenium.version>4.43.0</selenium.version>
 		<spring.boot.version>${parent.version}</spring.boot.version>
     </properties>
 	<dependencies>
@@ -125,6 +126,13 @@
 			<groupId>com.github.f4b6a3</groupId>
 			<artifactId>uuid-creator</artifactId>
 			<version>${uuid.creator.version}</version>
+		</dependency>
+		<!-- Source: https://mvnrepository.com/artifact/org.seleniumhq.selenium/selenium-java -->
+		<dependency>
+			<groupId>org.seleniumhq.selenium</groupId>
+			<artifactId>selenium-java</artifactId>
+			<version>${selenium.version}</version>
+			<scope>compile</scope>
 		</dependency>
 	</dependencies>
 
