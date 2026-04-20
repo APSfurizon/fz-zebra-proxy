@@ -4,7 +4,6 @@ import jakarta.annotation.PreDestroy;
 import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
 import org.springframework.context.annotation.Bean;
@@ -17,10 +16,10 @@ public class WebdriverConfiguration {
     @NotNull
     private final WebdriverConfig config;
 
-    public static WebDriver WEB_DRIVER;
+    public static ChromeDriver WEB_DRIVER;
 
     @Bean
-    public WebDriver webDriver() {
+    public ChromeDriver webDriver() {
         System.setProperty("webdriver.chrome.driver", config.getChromeDriverPath());
         ChromeOptions options = new ChromeOptions();
         options.setBinary(config.getChromeBinaryPath());

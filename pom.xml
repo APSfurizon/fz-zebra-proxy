@@ -38,6 +38,7 @@
 		<com.github.ben-manes.caffeine.version>3.2.3</com.github.ben-manes.caffeine.version>
 		<uuid.creator.version>6.0.0</uuid.creator.version>
 		<selenium.version>4.43.0</selenium.version>
+		<apache.pdfbox.version>3.0.7</apache.pdfbox.version>
 		<spring.boot.version>${parent.version}</spring.boot.version>
     </properties>
 	<dependencies>
@@ -132,6 +133,13 @@
 			<groupId>org.seleniumhq.selenium</groupId>
 			<artifactId>selenium-java</artifactId>
 			<version>${selenium.version}</version>
+			<scope>compile</scope>
+		</dependency>
+		<!-- Source: https://mvnrepository.com/artifact/org.apache.pdfbox/pdfbox -->
+		<dependency>
+			<groupId>org.apache.pdfbox</groupId>
+			<artifactId>pdfbox</artifactId>
+			<version>${apache.pdfbox.version}</version>
 			<scope>compile</scope>
 		</dependency>
 	</dependencies>

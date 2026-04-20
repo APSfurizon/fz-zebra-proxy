@@ -43,6 +43,7 @@ springdoc:
 webdriver:
   chromedriver-path: ${WEBDRIVER_CHROMEDRIVER_PATH:}
   chrome-binary-path: ${WEBDRIVER_CHROME_BINARY_PATH:}
+  load-timeout: ${WEBDRIVER_LOAD_TIMEOUT_MS:15000}
 
 worker:
-  delay: ${WORKER_DELAY_SECS:20}
+  delay: ${WORKER_DELAY_SECS:30}

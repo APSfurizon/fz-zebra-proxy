@@ -12,4 +12,6 @@ public class WebdriverConfig {
 
     @NotNull
     private final String chromeBinaryPath;
+
+    private final long loadTimeout;
 }

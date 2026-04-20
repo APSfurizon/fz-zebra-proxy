@@ -9,8 +9,7 @@ import org.jetbrains.annotations.NotNull;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
-import java.util.Map;
-import java.util.Queue;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -41,6 +40,10 @@ public class JobManagementService {
         return ret;
     }
 
+    public List<QueuePair> getQueues() {
+        return new ArrayList<>(queues.keySet());
+    }
+
     @Async
     public void runAsync(@NotNull QueuePair pair) {
         run(pair);
@@ -63,7 +66,7 @@ public class JobManagementService {
             }
             PrintIdContentPair job;
             while ((job = queue.poll()) != null) {
-                printingService.invoke(job);
+                printingService.invoke(job, pair);
             }
 
         } finally {

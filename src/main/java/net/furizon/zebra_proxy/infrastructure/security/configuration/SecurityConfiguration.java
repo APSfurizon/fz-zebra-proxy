@@ -33,6 +33,7 @@ public class SecurityConfiguration {
     public SecurityFilterChain internalFilterChain(HttpSecurity http) throws Exception {
         return http
                 .securityMatcher("/print/**")
+                .securityMatcher("/config/**")
                 .cors(AbstractHttpConfigurer::disable)
                 .csrf(CsrfConfigurer::disable)
                 .addFilterAt(

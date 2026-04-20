@@ -5,8 +5,8 @@ import lombok.Data;
 
 @Data
 public class QueuePair {
-    public final long operatorID;
-    @NotNull public final PrintType printType;
+    private final long operatorID;
+    @NotNull private final PrintType printType;
 
     public static @NotNull QueuePair of(final long operatorID, final PrintType printType) {
         return new QueuePair(operatorID, printType);
