@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Server Configuration</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f9f9f9;
+        }
+
+        /* Top Right Settings Panel */
+        .settings-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: #fff;
+            border: 1px solid #ccc;
+            padding: 15px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            width: 250px;
+        }
+        .settings-panel label {
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .settings-panel input {
+            padding: 5px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        /* Main Content Container */
+        .main-content {
+            margin-top: 20px;
+            max-width: 800px;
+        }
+
+        .controls {
+            margin-bottom: 15px;
+        }
+
+        button {
+            padding: 8px 12px;
+            cursor: pointer;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 3px;
+        }
+        button:hover { background-color: #0056b3; }
+
+        /* Configuration Grid */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #fff;
+            margin-bottom: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: center;
+        }
+        th {
+            background-color: #f1f1f1;
+        }
+        .operator-id-input {
+            width: 80px;
+            text-align: center;
+        }
+        select {
+            padding: 5px;
+            width: 100%;
+            max-width: 150px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="settings-panel">
+    <label>Server URL:</label>
+    <input type="text" id="serverUrl" placeholder="http://127.0.0.1:8082">
+
+    <label>Username:</label>
+    <input type="text" id="username" placeholder="Username">
+
+    <label>Password:</label>
+    <input type="password" id="password" placeholder="Password">
+
+    <button onclick="saveConnectionSettings()">Save Connection</button>
+</div>
+
+<div class="main-content">
+    <h2>Print Configuration</h2>
+
+    <div class="controls">
+        <button onclick="refreshData()">Refresh Data</button>
+        <button onclick="addEmptyRow()">+ Add Operator Row</button>
+    </div>
+
+    <table id="configTable">
+        <thead>
+        <tr id="tableHeaderRow">
+            <th>Operator ID</th>
+        </tr>
+        </thead>
+        <tbody id="tableBody">
+        </tbody>
+    </table>
+
+    <div class="controls">
+        <button onclick="saveConfiguration()">Save Config</button>
+    </div>
+</div>
+
+<script>
+    // State variables
+    let printTypes = [];
+    let printersList = [];
+    let defaultPrinter = "";
+    let currentConfig = {};
+
+    // --- Utility: Cookie Management ---
+    function setCookie(name, value, days) {
+        let expires = "";
+        if (days) {
+            const date = new Date();
+            date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+            expires = "; expires=" + date.toUTCString();
+        }
+        document.cookie = name + "=" + encodeURIComponent(value) + expires + "; path=/";
+    }
+
+    function getCookie(name) {
+        const nameEQ = name + "=";
+        const ca = document.cookie.split(';');
+        for(let i=0; i < ca.length; i++) {
+            let c = ca[i];
+            while (c.charAt(0) === ' ') c = c.substring(1, c.length);
+            if (c.indexOf(nameEQ) === 0) return decodeURIComponent(c.substring(nameEQ.length, c.length));
+        }
+        return null;
+    }
+
+    // --- Core: Authentication API Fetch ---
+    async function apiFetch(endpoint, options = {}) {
+        const baseUrl = document.getElementById('serverUrl').value.replace(/\/$/, ""); // Remove trailing slash
+        const user = document.getElementById('username').value;
+        const pass = document.getElementById('password').value;
+
+        const headers = new Headers(options.headers || {});
+        headers.append('Authorization', 'Basic ' + btoa(user + ':' + pass));
+        headers.append('Accept', '*/*');
+
+        if (options.body) {
+            headers.append('Content-Type', 'application/json');
+        }
+
+        return fetch(baseUrl + endpoint, { ...options, headers });
+    }
+
+    // --- Init: On Page Load ---
+    window.onload = function() {
+        const savedUrl = getCookie("serverUrl");
+        const savedUser = getCookie("username");
+        const savedPass = getCookie("password");
+
+        if (savedUrl) document.getElementById('serverUrl').value = savedUrl;
+        if (savedUser) document.getElementById('username').value = savedUser;
+        if (savedPass) document.getElementById('password').value = savedPass;
+
+        refreshData();
+    };
+
+    // --- Action: Test Connection & Save Cookies ---
+    async function saveConnectionSettings() {
+        try {
+            const response = await apiFetch('/internal/print/ping');
+            const textData = await response.text();
+
+            if (response.ok && textData === 'true') {
+                // Save to cookies for 30 days
+                setCookie("serverUrl", document.getElementById('serverUrl').value, 30);
+                setCookie("username", document.getElementById('username').value, 30);
+                setCookie("password", document.getElementById('password').value, 30);
+                alert("Connection successful! Settings saved.");
+                await refreshData();
+            } else {
+                alert(`Connection Failed!\nStatus: ${response.status}\nMessage: ${textData}`);
+            }
+        } catch (error) {
+            alert(`Error connecting to server: ${error.message}`);
+        }
+    }
+
+    // --- Action: Refresh Data ---
+    async function refreshData() {
+        try {
+            // 1. Fetch Print Types
+            let resTypes = await apiFetch('/internal/config/print-types');
+            if (!resTypes.ok) throw new Error("Failed to fetch print types: " + resTypes.status);
+            printTypes = await resTypes.json();
+
+            // 2. Fetch Printers
+            let resPrinters = await apiFetch('/internal/config/printers');
+            if (!resPrinters.ok) throw new Error("Failed to fetch printers: " + resPrinters.status);
+            let printerData = await resPrinters.json();
+            printersList = printerData.printers || [];
+            defaultPrinter = printerData.defaultPrinter || "";
+
+            // 3. Fetch Configuration
+            let resConfig = await apiFetch('/internal/config/');
+            if (!resConfig.ok) throw new Error("Failed to fetch config: " + resConfig.status);
+            let configData = await resConfig.json();
+            currentConfig = configData.printers || {};
+
+            renderTable();
+
+        } catch (error) {
+            alert(`Error refreshing data: ${error.message}`);
+        }
+    }
+
+    // --- UI Logic: Build Table ---
+    function renderTable() {
+        // Rebuild Header
+        const headerRow = document.getElementById('tableHeaderRow');
+        headerRow.innerHTML = '<th>Operator ID</th>';
+        printTypes.forEach(pt => {
+            const th = document.createElement('th');
+            th.innerText = pt;
+            headerRow.appendChild(th);
+        });
+        // Add a header for the Remove button
+        const actionTh = document.createElement('th');
+        actionTh.innerText = "Action";
+        headerRow.appendChild(actionTh);
+
+        // Rebuild Body
+        const tbody = document.getElementById('tableBody');
+        tbody.innerHTML = '';
+
+        // Populate existing rows
+        for (let operatorId in currentConfig) {
+            appendRowToTable(operatorId, currentConfig[operatorId]);
+        }
+    }
+
+    function addEmptyRow() {
+        if (printTypes.length === 0) {
+            alert("Please click 'Refresh Data' first to load available print types.");
+            return;
+        }
+        appendRowToTable('', {});
+    }
+
+    function appendRowToTable(operatorId, rowConfig) {
+        const tbody = document.getElementById('tableBody');
+        const tr = document.createElement('tr');
+
+        // 1. Operator ID Cell
+        const tdId = document.createElement('td');
+        const inputId = document.createElement('input');
+        inputId.type = 'number';
+        inputId.className = 'operator-id-input';
+        inputId.value = operatorId;
+        inputId.placeholder = "ID";
+        tdId.appendChild(inputId);
+        tr.appendChild(tdId);
+
+        // 2. Dropdowns for each Print Type
+        printTypes.forEach(pt => {
+            const td = document.createElement('td');
+            const select = document.createElement('select');
+            select.className = 'printer-dropdown';
+            select.dataset.printType = pt;
+
+            // Blank default option
+            const defaultOpt = document.createElement('option');
+            defaultOpt.value = "";
+            defaultOpt.innerText = "-- Select Printer --";
+            select.appendChild(defaultOpt);
+
+            // Add available printers
+            printersList.forEach(printer => {
+                const opt = document.createElement('option');
+                opt.value = printer;
+                // Append identifier for the default printer as per requirements
+                opt.innerText = (printer === defaultPrinter) ? `${printer} (Default)` : printer;
+
+                // Pre-select if configuration exists for this cell
+                if (rowConfig[pt] && rowConfig[pt].printerName === printer) {
+                    opt.selected = true;
+                }
+
+                select.appendChild(opt);
+            });
+
+            td.appendChild(select);
+            tr.appendChild(td);
+        });
+
+        // 3. Remove Row Button
+        const tdAction = document.createElement('td');
+        const removeBtn = document.createElement('button');
+        removeBtn.innerText = 'Remove';
+        removeBtn.style.backgroundColor = '#dc3545'; // Red color to indicate deletion
+
+        // Attach event to remove the row from the DOM
+        removeBtn.onclick = function() {
+            tr.remove();
+        };
+
+        tdAction.appendChild(removeBtn);
+        tr.appendChild(tdAction);
+
+        tbody.appendChild(tr);
+    }
+
+    // --- Action: Save Configuration ---
+    async function saveConfiguration() {
+        const rows = document.querySelectorAll('#tableBody tr');
+        const payload = { printers: {} };
+
+        rows.forEach(tr => {
+            const opIdInput = tr.querySelector('.operator-id-input');
+            const operatorId = opIdInput.value.trim();
+
+            if (!operatorId) return; // Ignore rows without an Operator ID
+
+            const rowData = {};
+            const dropdowns = tr.querySelectorAll('.printer-dropdown');
+
+            dropdowns.forEach(select => {
+                const printType = select.dataset.printType;
+                const selectedPrinter = select.value;
+
+                // Only add to payload if a printer was actually selected
+                if (selectedPrinter) {
+                    rowData[printType] = { printerName: selectedPrinter };
+                }
+            });
+
+            // Add to final structure if there's at least one setting configured for this operator
+            if (Object.keys(rowData).length > 0) {
+                payload.printers[operatorId] = rowData;
+            }
+        });
+
+        try {
+            const response = await apiFetch('/internal/config/', {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            });
+
+            if (response.ok) {
+                alert("Configuration successfully saved to the server!");
+            } else {
+                alert(`Failed to save configuration. Status: ${response.status}`);
+            }
+        } catch (error) {
+            alert(`Error saving configuration: ${error.message}`);
+        }
+    }
+</script>
+</body>
+</html>

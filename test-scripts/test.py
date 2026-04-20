@@ -69,7 +69,7 @@ def submitJob(html, type):
     }
     doPost(f"{BASE_URL_API}print/", json=json)
     
-#ping()
+ping()
 
 JOB_TYPE_USER = "USER_BADGE"
 JOB_TYPE_FURSUIT = "FURSUIT_BADGE"
@@ -79,4 +79,4 @@ with open("badgeFursuits.html", "r") as f:
     badgeFursuit = f.read()
     
 #submitJob(badgeUser, JOB_TYPE_USER)
-submitJob(badgeFursuit, JOB_TYPE_FURSUIT)
+#submitJob(badgeFursuit, JOB_TYPE_FURSUIT)

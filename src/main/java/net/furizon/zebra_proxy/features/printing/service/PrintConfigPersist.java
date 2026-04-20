@@ -3,6 +3,7 @@ package net.furizon.zebra_proxy.features.printing.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.furizon.zebra_proxy.features.printing.dto.PrinterSettings;
@@ -14,7 +15,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Component
@@ -28,7 +31,8 @@ public class PrintConfigPersist {
     public void save(@NotNull Map<QueuePair, PrinterSettings> map) {
         log.info("Saving config to disk");
         try {
-            String config = objectMapper.writeValueAsString(map);
+            List<Obj> objs = map.entrySet().stream().map(Obj::fromEntry).toList();
+            String config = objectMapper.writeValueAsString(objs);
             Files.write(CONFIG_FILE, config.getBytes());
         } catch (JsonProcessingException e) {
             log.error("Failed to convert config while saving it to disk", e);
@@ -40,7 +44,8 @@ public class PrintConfigPersist {
     public @NotNull Map<QueuePair, PrinterSettings> load() {
         log.info("Loading config from disk");
         try {
-            return objectMapper.readValue(Files.readString(CONFIG_FILE), new TypeReference<Map<QueuePair, PrinterSettings>>() {});
+            List<Obj> objs = objectMapper.readValue(Files.readString(CONFIG_FILE), new TypeReference<List<Obj>>() {});
+            return objs.stream().collect(Collectors.toMap(Obj::getQueuePair, Obj::getPrinterSettings));
         } catch (JsonProcessingException e) {
             log.error("Failed to convert config while loading it from disk", e);
             return Map.of();
@@ -49,6 +54,22 @@ public class PrintConfigPersist {
             log.error("Failed to read config from disk", e);
             return Map.of();
             //throw new RuntimeException(e);
+        }
+    }
+
+    @Data
+    private static class Obj {
+        @NotNull
+        private final QueuePair queuePair;
+        @NotNull
+        private final PrinterSettings printerSettings;
+
+        public static Obj fromEntry(@NotNull Map.Entry<QueuePair, PrinterSettings> entry) {
+            return new Obj(entry.getKey(), entry.getValue());
+        }
+
+        public Map.Entry<QueuePair, PrinterSettings> toEntry() {
+            return Map.entry(queuePair, printerSettings);
         }
     }
 }

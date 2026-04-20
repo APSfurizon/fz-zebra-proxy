@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.*;
 
 @Slf4j
 @RestController
-@RequestMapping("/print")
+@RequestMapping("/internal/print")
 @RequiredArgsConstructor
 public class PrintingController {
     @NotNull

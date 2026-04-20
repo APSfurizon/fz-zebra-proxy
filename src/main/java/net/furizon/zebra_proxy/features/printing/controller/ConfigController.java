@@ -15,7 +15,7 @@ import java.util.*;
 
 @Slf4j
 @RestController
-@RequestMapping("/config")
+@RequestMapping("/internal/config")
 @RequiredArgsConstructor
 public class ConfigController {
     @NotNull
@@ -37,6 +37,12 @@ public class ConfigController {
     @GetMapping("/operators")
     public List<Long> getOperators() {
         return new ArrayList<>(printConfigService.getOperators());
+    }
+
+    @InternalAuthorize
+    @GetMapping("/print-types")
+    public List<PrintType> getPrintTypes() {
+        return Arrays.asList(PrintType.values());
     }
 
     @InternalAuthorize
