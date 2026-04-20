@@ -3,7 +3,7 @@ from requests import Response
 from requests.auth import HTTPBasicAuth
 
 BASE_URL = "http://localhost:8082"
-BASE_URL_API = f"{BASE_URL}/"
+BASE_URL_API = f"{BASE_URL}/internal/"
 
 import random
 import string
@@ -69,7 +69,7 @@ def submitJob(html, type):
     }
     doPost(f"{BASE_URL_API}print/", json=json)
     
-ping()
+#ping()
 
 JOB_TYPE_USER = "USER_BADGE"
 JOB_TYPE_FURSUIT = "FURSUIT_BADGE"
@@ -78,5 +78,5 @@ with open("badgeUsers.html", "r") as f:
 with open("badgeFursuits.html", "r") as f:
     badgeFursuit = f.read()
     
-#submitJob(badgeUser, JOB_TYPE_USER)
+submitJob(badgeUser, JOB_TYPE_USER)
 #submitJob(badgeFursuit, JOB_TYPE_FURSUIT)

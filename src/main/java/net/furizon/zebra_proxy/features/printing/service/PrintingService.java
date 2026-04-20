@@ -67,6 +67,8 @@ public class PrintingService {
             }
             PrinterJob job = PrinterJob.getPrinterJob();
             job.setPageable(new PDFPageable(document));
+            job.setCopies(1);
+            job.setJobName(String.format("fz-zebra-proxy (%s)", pair.getPrintId()));
             job.setPrintService(printer);
             job.print();
 
@@ -79,6 +81,7 @@ public class PrintingService {
         Path tempHtml = null;
         try {
             tempHtml = Files.createTempFile(null, ".html");
+            log.debug("Writing temp html to {}", tempHtml);
             Files.write(tempHtml, pair.getHtml().getBytes());
 
             webDriver.get(tempHtml.toAbsolutePath().toString());
@@ -95,7 +98,7 @@ public class PrintingService {
             Map<String, Object> result = webDriver.executeCdpCommand("Page.printToPDF", printParams);
 
             byte[] pdfContent = Base64.getDecoder().decode((String) result.get("data"));
-            Files.write(Paths.get("output.pdf"), pdfContent);
+            //Files.write(Paths.get("output.pdf"), pdfContent);
             return pdfContent;
 
         } catch (IOException e) {
@@ -104,6 +107,7 @@ public class PrintingService {
         } finally {
             if (tempHtml != null) {
                 try {
+                    log.debug("Deleting temp html from {}", tempHtml);
                     Files.deleteIfExists(tempHtml);
                 } catch (IOException e) {
                     log.error("IOException while deleting temp file {} for job {}", tempHtml, pair, e);
