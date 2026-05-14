@@ -15,6 +15,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -44,6 +45,9 @@ public class PrintConfigPersist {
     public @NotNull Map<QueuePair, PrinterSettings> load() {
         log.info("Loading config from disk");
         try {
+            if (!Files.exists(CONFIG_FILE)) {
+                return Collections.emptyMap();
+            }
             List<Obj> objs = objectMapper.readValue(Files.readString(CONFIG_FILE), new TypeReference<List<Obj>>() {});
             return objs.stream().collect(Collectors.toMap(Obj::getQueuePair, Obj::getPrinterSettings));
         } catch (JsonProcessingException e) {
