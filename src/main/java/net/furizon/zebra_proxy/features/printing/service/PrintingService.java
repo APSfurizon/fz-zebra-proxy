@@ -10,6 +10,8 @@ import net.furizon.zebra_proxy.infrastructure.selenium.WebdriverUtils;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.printing.PDFPageable;
+import org.apache.pdfbox.printing.PDFPrintable;
+import org.apache.pdfbox.printing.Scaling;
 import org.jetbrains.annotations.NotNull;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.springframework.stereotype.Service;
@@ -64,7 +66,8 @@ public class PrintingService {
                 printer = printUtils.findDefaultPrintService();
             }
             PrinterJob job = PrinterJob.getPrinterJob();
-            job.setPageable(new PDFPageable(document));
+            //job.setPageable(new PDFPageable(document));
+            job.setPrintable(new PDFPrintable(document, Scaling.STRETCH_TO_FIT));
             job.setCopies(1);
             job.setJobName(String.format("fz-zebra-proxy (%s)", pair.getPrintId()));
             job.setPrintService(printer);
@@ -83,7 +86,7 @@ public class PrintingService {
             Files.write(tempHtml, pair.getHtml().getBytes());
 
             webDriver.get(tempHtml.toAbsolutePath().toString());
-            WebdriverUtils.waitForPageLoad(webDriver, webdriverConfig.getLoadTimeout());
+            WebdriverUtils.waitForPageLoad(webDriver, webdriverConfig.getLoadTimeout(), webdriverConfig.getExtraWaitMs());
 
             //Cannot use the standard print otherwise it would print on A4
             Map<String, Object> printParams = new HashMap<>();

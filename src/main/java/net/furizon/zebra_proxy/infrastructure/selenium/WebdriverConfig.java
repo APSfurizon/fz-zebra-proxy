@@ -2,6 +2,7 @@ package net.furizon.zebra_proxy.infrastructure.selenium;
 
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
+import org.jetbrains.annotations.Nullable;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @Data
@@ -14,4 +15,7 @@ public class WebdriverConfig {
     private final String chromeBinaryPath;
 
     private final long loadTimeout;
+
+    @Nullable
+    private final Long extraWaitMs;
 }
