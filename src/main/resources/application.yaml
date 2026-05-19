@@ -49,3 +49,11 @@ webdriver:
 
 worker:
   delay: ${WORKER_DELAY_SECS:30}
+
+
+print:
+  card:
+    width: ${PRINT_CARD_WIDTH_INCH:2.170} #2.125
+    height: ${PRINT_CARD_HEIGHT_INCH:3.425} #3.370
+    invert-media-orientation: ${PRINT_CARD_INVERT_MEDIA_ORIENTATION:false}
+    invert-pageformat-orientation: ${PRINT_CARD_INVERT_PAGEFORMAT_ORIENTATION:false}

@@ -5,20 +5,17 @@ import lombok.extern.slf4j.Slf4j;
 import net.furizon.zebra_proxy.features.printing.dto.PrintIdContentPair;
 import net.furizon.zebra_proxy.features.printing.dto.PrinterSettings;
 import net.furizon.zebra_proxy.features.printing.dto.QueuePair;
+import net.furizon.zebra_proxy.infrastructure.pdfUtils.FzPDFPageable;
+import net.furizon.zebra_proxy.infrastructure.pdfUtils.PrintingSettingsConfig;
 import net.furizon.zebra_proxy.infrastructure.selenium.WebdriverConfig;
 import net.furizon.zebra_proxy.infrastructure.selenium.WebdriverUtils;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
-import org.apache.pdfbox.printing.PDFPageable;
-import org.apache.pdfbox.printing.PDFPrintable;
-import org.apache.pdfbox.printing.Scaling;
 import org.jetbrains.annotations.NotNull;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.springframework.stereotype.Service;
 
 import javax.print.PrintService;
-import java.awt.print.PageFormat;
-import java.awt.print.Paper;
 import java.awt.print.PrinterException;
 import java.awt.print.PrinterJob;
 import java.io.IOException;
@@ -40,6 +37,8 @@ public class PrintingService {
     private final WebdriverConfig webdriverConfig;
     @NotNull
     private final OsPrintUtils printUtils;
+    @NotNull
+    private final PrintingSettingsConfig printConfig;
 
 
     public synchronized void invoke(@NotNull PrintIdContentPair pair, @NotNull QueuePair queue) {
@@ -61,16 +60,13 @@ public class PrintingService {
 
     private void printPdf(byte[] pdfContent, @NotNull PrintIdContentPair pair, @NotNull PrinterSettings settings) {
         try (PDDocument document = Loader.loadPDF(pdfContent)) {
-            log.info("Document {}", document);
-
             PrintService printer = printUtils.findPrintService(settings);
             if (printer == null) {
                 log.warn("Printer {} not found, using default printer", settings.getPrinterName());
                 printer = printUtils.findDefaultPrintService();
             }
             PrinterJob job = PrinterJob.getPrinterJob();
-            //job.setPageable(new PDFPageable(document));
-            job.setPrintable(new PDFPrintable(document, Scaling.STRETCH_TO_FIT), generatePageFormat());
+            job.setPageable(generatePageable(document));
             job.setCopies(1);
             job.setJobName(String.format("fz-zebra-proxy (%s)", pair.getPrintId()));
             job.setPrintService(printer);
@@ -81,22 +77,23 @@ public class PrintingService {
         }
     }
 
-    private PageFormat generatePageFormat() {
-        log.debug("Test #2");
-        double cardWidthPoints = 2.375 * 72.0;
-        double cardHeightPoints = 1.125 * 72.0;
+    private FzPDFPageable generatePageable(PDDocument document) {
+        PrintingSettingsConfig.Card c = printConfig.getCard();
+        double w = c.getWidth();
+        double h = c.getHeight();
+        boolean invertMediaOrientation = c.isInvertMediaOrientation();
+        boolean invertPageFormatOrientation = c.isInvertPageformatOrientation();
 
-        Paper cardPaper = new Paper();
-        cardPaper.setSize(cardWidthPoints, cardHeightPoints);
-        cardPaper.setImageableArea(0.0, 0.0, cardWidthPoints, cardHeightPoints);
-
-        log.info("PAPER {}", cardPaper);
-
-        PageFormat pageFormat = new PageFormat();
-        pageFormat.setPaper(cardPaper);
-        //pageFormat.setOrientation(PageFormat.LANDSCAPE);
-        log.info("FORMAT {}", pageFormat);
-        return pageFormat;
+        FzPDFPageable pageable = new FzPDFPageable(document);
+        pageable.setPaperWidthIn(w);
+        pageable.setPaperHeightIn(h);
+        pageable.setImageableAreaXIn(0.0);
+        pageable.setImageableAreaYIn(0.0);
+        pageable.setImageableAreaWidthIn(w);
+        pageable.setImageableAreaHeightIn(h);
+        pageable.setInvertMediaOrientation(invertMediaOrientation);
+        pageable.setInvertPageFormatOrientation(invertPageFormatOrientation);
+        return pageable;
     }
 
     private byte[] exportToPdf(@NotNull PrintIdContentPair pair) {
