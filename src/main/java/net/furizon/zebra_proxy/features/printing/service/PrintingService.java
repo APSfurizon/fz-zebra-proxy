@@ -17,6 +17,8 @@ import org.openqa.selenium.chrome.ChromeDriver;
 import org.springframework.stereotype.Service;
 
 import javax.print.PrintService;
+import java.awt.print.PageFormat;
+import java.awt.print.Paper;
 import java.awt.print.PrinterException;
 import java.awt.print.PrinterJob;
 import java.io.IOException;
@@ -59,6 +61,7 @@ public class PrintingService {
 
     private void printPdf(byte[] pdfContent, @NotNull PrintIdContentPair pair, @NotNull PrinterSettings settings) {
         try (PDDocument document = Loader.loadPDF(pdfContent)) {
+            log.info("Document {}", document);
 
             PrintService printer = printUtils.findPrintService(settings);
             if (printer == null) {
@@ -67,7 +70,7 @@ public class PrintingService {
             }
             PrinterJob job = PrinterJob.getPrinterJob();
             //job.setPageable(new PDFPageable(document));
-            job.setPrintable(new PDFPrintable(document, Scaling.STRETCH_TO_FIT));
+            job.setPrintable(new PDFPrintable(document, Scaling.STRETCH_TO_FIT), generatePageFormat());
             job.setCopies(1);
             job.setJobName(String.format("fz-zebra-proxy (%s)", pair.getPrintId()));
             job.setPrintService(printer);
@@ -76,6 +79,24 @@ public class PrintingService {
         } catch (IOException | PrinterException ex) {
             log.error("Exception while printing pdf on job {}", pair, ex);
         }
+    }
+
+    private PageFormat generatePageFormat() {
+        log.debug("Test #2");
+        double cardWidthPoints = 2.375 * 72.0;
+        double cardHeightPoints = 1.125 * 72.0;
+
+        Paper cardPaper = new Paper();
+        cardPaper.setSize(cardWidthPoints, cardHeightPoints);
+        cardPaper.setImageableArea(0.0, 0.0, cardWidthPoints, cardHeightPoints);
+
+        log.info("PAPER {}", cardPaper);
+
+        PageFormat pageFormat = new PageFormat();
+        pageFormat.setPaper(cardPaper);
+        //pageFormat.setOrientation(PageFormat.LANDSCAPE);
+        log.info("FORMAT {}", pageFormat);
+        return pageFormat;
     }
 
     private byte[] exportToPdf(@NotNull PrintIdContentPair pair) {
