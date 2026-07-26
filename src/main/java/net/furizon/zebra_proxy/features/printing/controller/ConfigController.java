@@ -5,8 +5,9 @@ import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.furizon.zebra_proxy.features.printing.dto.*;
-import net.furizon.zebra_proxy.features.printing.service.OsPrintUtils;
 import net.furizon.zebra_proxy.features.printing.service.PrintConfigService;
+import net.furizon.zebra_proxy.features.printing.service.printers.OsPrinterService;
+import net.furizon.zebra_proxy.features.printing.service.printers.PrinterService;
 import net.furizon.zebra_proxy.infrastructure.security.annotation.InternalAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -21,14 +22,14 @@ public class ConfigController {
     @NotNull
     private final PrintConfigService printConfigService;
     @NotNull
-    private final OsPrintUtils osPrintUtils;
+    private final OsPrinterService osPrintUtils;
 
     @InternalAuthorize
     @GetMapping("/printers")
     public PrinterListResponse getPrinters() {
         PrintService def = osPrintUtils.findDefaultPrintService();
         return new PrinterListResponse(
-                new ArrayList<>(osPrintUtils.getAvailablePrinters()),
+                PrinterService.getAllAvailablePrinters(),
                 def == null ? null : def.getName()
         );
     }

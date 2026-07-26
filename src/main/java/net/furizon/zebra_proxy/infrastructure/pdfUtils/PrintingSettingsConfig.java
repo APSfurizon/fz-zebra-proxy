@@ -13,7 +13,15 @@ public class PrintingSettingsConfig {
     public static class Card {
         private final double width;
         private final double height;
+        private final double dpi;
         private final boolean invertMediaOrientation;
         private final boolean invertPageformatOrientation;
+
+        public final int widthPx(double dpi) {
+            return (int) Math.round(width * dpi);
+        }
+        public final int heightPx(double dpi) {
+            return (int) Math.round(height * dpi);
+        }
     }
 }

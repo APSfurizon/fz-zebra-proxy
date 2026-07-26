@@ -5,7 +5,7 @@ import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.furizon.zebra_proxy.features.printing.dto.PrintRequest;
-import net.furizon.zebra_proxy.features.printing.service.JobManagementService;
+import net.furizon.zebra_proxy.features.printing.service.PrintingService;
 import net.furizon.zebra_proxy.infrastructure.security.annotation.InternalAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -14,8 +14,9 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/internal/print")
 @RequiredArgsConstructor
 public class PrintingController {
+
     @NotNull
-    private final JobManagementService jobManagementService;
+    private final PrintingService printingService;
 
     @InternalAuthorize
     @GetMapping("/ping")
@@ -27,7 +28,6 @@ public class PrintingController {
     @PostMapping("/")
     public void submitJob(@Valid @RequestBody @NotNull PrintRequest request) {
         log.info("Received print request: {}", request);
-        var pair = jobManagementService.submitJob(request);
-        jobManagementService.runAsync(pair);
+        printingService.invoke(request.toIdContentPair(), request.toQueuePair());
     }
 }

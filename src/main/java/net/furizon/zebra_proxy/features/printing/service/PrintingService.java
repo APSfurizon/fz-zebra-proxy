@@ -5,19 +5,13 @@ import lombok.extern.slf4j.Slf4j;
 import net.furizon.zebra_proxy.features.printing.dto.PrintIdContentPair;
 import net.furizon.zebra_proxy.features.printing.dto.PrinterSettings;
 import net.furizon.zebra_proxy.features.printing.dto.QueuePair;
-import net.furizon.zebra_proxy.infrastructure.pdfUtils.FzPDFPageable;
-import net.furizon.zebra_proxy.infrastructure.pdfUtils.PrintingSettingsConfig;
+import net.furizon.zebra_proxy.features.printing.service.printers.PrinterService;
 import net.furizon.zebra_proxy.infrastructure.selenium.WebdriverConfig;
 import net.furizon.zebra_proxy.infrastructure.selenium.WebdriverUtils;
-import org.apache.pdfbox.Loader;
-import org.apache.pdfbox.pdmodel.PDDocument;
 import org.jetbrains.annotations.NotNull;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.springframework.stereotype.Service;
 
-import javax.print.PrintService;
-import java.awt.print.PrinterException;
-import java.awt.print.PrinterJob;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -35,10 +29,6 @@ public class PrintingService {
     private final PrintConfigService printConfigService;
     @NotNull
     private final WebdriverConfig webdriverConfig;
-    @NotNull
-    private final OsPrintUtils printUtils;
-    @NotNull
-    private final PrintingSettingsConfig printConfig;
 
 
     public synchronized void invoke(@NotNull PrintIdContentPair pair, @NotNull QueuePair queue) {
@@ -54,47 +44,13 @@ public class PrintingService {
             log.error("Printer config not found for queue {}", queue);
             return;
         }
-        printPdf(pdfContent, pair, printerConfig);
+        //TODO CHANGE TO QUEUE MANAGER
+        PrinterService printerService = PrinterService.getPrinterService(printerConfig.getPrinterName());
+        printerService.printPdf(pdfContent, pair, printerConfig);
         log.debug("Printed {}", pair);
     }
 
-    private void printPdf(byte[] pdfContent, @NotNull PrintIdContentPair pair, @NotNull PrinterSettings settings) {
-        try (PDDocument document = Loader.loadPDF(pdfContent)) {
-            PrintService printer = printUtils.findPrintService(settings);
-            if (printer == null) {
-                log.warn("Printer {} not found, using default printer", settings.getPrinterName());
-                printer = printUtils.findDefaultPrintService();
-            }
-            PrinterJob job = PrinterJob.getPrinterJob();
-            job.setPageable(generatePageable(document));
-            job.setCopies(1);
-            job.setJobName(String.format("fz-zebra-proxy (%s)", pair.getPrintId()));
-            job.setPrintService(printer);
-            job.print();
 
-        } catch (IOException | PrinterException ex) {
-            log.error("Exception while printing pdf on job {}", pair, ex);
-        }
-    }
-
-    private FzPDFPageable generatePageable(PDDocument document) {
-        PrintingSettingsConfig.Card c = printConfig.getCard();
-        double w = c.getWidth();
-        double h = c.getHeight();
-        boolean invertMediaOrientation = c.isInvertMediaOrientation();
-        boolean invertPageFormatOrientation = c.isInvertPageformatOrientation();
-
-        FzPDFPageable pageable = new FzPDFPageable(document);
-        pageable.setPaperWidthIn(w);
-        pageable.setPaperHeightIn(h);
-        pageable.setImageableAreaXIn(0.0);
-        pageable.setImageableAreaYIn(0.0);
-        pageable.setImageableAreaWidthIn(w);
-        pageable.setImageableAreaHeightIn(h);
-        pageable.setInvertMediaOrientation(invertMediaOrientation);
-        pageable.setInvertPageFormatOrientation(invertPageFormatOrientation);
-        return pageable;
-    }
 
     private byte[] exportToPdf(@NotNull PrintIdContentPair pair) {
         Path tempHtml = null;
