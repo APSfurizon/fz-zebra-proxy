@@ -87,8 +87,16 @@ public class ZebraService implements PrinterService {
                 BufferedImage image = renderPageToCard(renderer, document.getPage(page), page);
                 byte[] imageBytes = toBmp(image);
 
-                panels.add(panel(CardSide.Front, PrintType.Color, render(graphics, PrintType.Color, imageBytes, image.getWidth(), image.getHeight())));
+                int wPx = image.getWidth();
+                int hPx = image.getHeight();
+                if (wPx > hPx) {
+                    setJobSetting(printer, ZebraCardJobSettingNamesZmotif.ORIENTATION_FRONT, "Landscape");
+                } else {
+                    setJobSetting(printer, ZebraCardJobSettingNamesZmotif.ORIENTATION_FRONT, "Portrait");
+                }
+                panels.add(panel(CardSide.Front, PrintType.Color, render(graphics, PrintType.Color, imageBytes, wPx, hPx)));
                 graphics.clear();
+
                 int jobId = printer.print(1, panels);
                 waitForJob(printer, jobId);
             }
@@ -111,6 +119,10 @@ public class ZebraService implements PrinterService {
             String errorText = job.errorInfo != null ? job.errorInfo.description : "";
 
             log.debug("Job {}: {} / {} (Error? Code:{} - Text: {})", jobId, status, position, errorCode, errorText);
+
+            if (cancelled && errorCode > 0) {
+                return null;
+            }
 
             if (status.contains("done_ok")) {
                 return status;
@@ -141,6 +153,7 @@ public class ZebraService implements PrinterService {
             if (System.currentTimeMillis() > hardDeadline) {
                 if (!cancelled) {
                     printer.cancel(jobId);
+                    cancelled = true;
                 }
                 log.error("Job {} did not finish within " + JOB_TIMEOUT_MS + " ms", jobId);
             }
@@ -149,14 +162,17 @@ public class ZebraService implements PrinterService {
         }
     }
     private ZebraCardImageI render(ZebraGraphics graphics, PrintType printType, byte[] imageData, int wPx, int hPx) throws Exception {
-        var conf = printConfig.getCard();
-        double dpi = conf.getDpi();
-        boolean turnSideways = wPx < hPx;
-        graphics.initialize(0, 0, OrientationType.Landscape, printType, Color.WHITE);
-        graphics.drawImage(imageData, 0, 0, 0, 0, turnSideways ? RotationType.Rotate90FlipNone : RotationType.RotateNoneFlipNone);
+        boolean isPortrait = wPx < hPx;
+        graphics.initialize(wPx, hPx, isPortrait ? OrientationType.Portrait : OrientationType.Landscape, printType, Color.WHITE);
+        graphics.drawImage(imageData, 0, 0, 0, 0, !isPortrait ? RotationType.Rotate90FlipNone : RotationType.RotateNoneFlipNone);
         return graphics.createImage();
     }
     private GraphicsInfo panel(CardSide side, PrintType printType, ZebraCardImageI image) {
+        try {
+            Files.write(Paths.get("data/shit.bmp"), image.getImageData());
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
         GraphicsInfo info = new GraphicsInfo();
         info.side = side;
         info.printType = printType;
