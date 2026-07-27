@@ -6,7 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import net.furizon.zebra_proxy.features.printing.dto.PrinterSettings;
+import net.furizon.zebra_proxy.features.printing.dto.PrinterIdentifier;
 import net.furizon.zebra_proxy.features.printing.dto.QueuePair;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.stereotype.Component;
@@ -29,7 +29,7 @@ public class PrintConfigPersist {
     @NotNull
     private final ObjectMapper objectMapper;
 
-    public void save(@NotNull Map<QueuePair, PrinterSettings> map) {
+    public void save(@NotNull Map<QueuePair, PrinterIdentifier> map) {
         log.info("Saving config to disk");
         try {
             List<Obj> objs = map.entrySet().stream().map(Obj::fromEntry).toList();
@@ -42,14 +42,14 @@ public class PrintConfigPersist {
         }
     }
 
-    public @NotNull Map<QueuePair, PrinterSettings> load() {
+    public @NotNull Map<QueuePair, PrinterIdentifier> load() {
         log.info("Loading config from disk");
         try {
             if (!Files.exists(CONFIG_FILE)) {
                 return Collections.emptyMap();
             }
             List<Obj> objs = objectMapper.readValue(Files.readString(CONFIG_FILE), new TypeReference<List<Obj>>() {});
-            return objs.stream().collect(Collectors.toMap(Obj::getQueuePair, Obj::getPrinterSettings));
+            return objs.stream().collect(Collectors.toMap(Obj::getQueuePair, Obj::getPrinterIdentifier));
         } catch (JsonProcessingException e) {
             log.error("Failed to convert config while loading it from disk", e);
             return Map.of();
@@ -66,14 +66,14 @@ public class PrintConfigPersist {
         @NotNull
         private final QueuePair queuePair;
         @NotNull
-        private final PrinterSettings printerSettings;
+        private final PrinterIdentifier printerIdentifier;
 
-        public static Obj fromEntry(@NotNull Map.Entry<QueuePair, PrinterSettings> entry) {
+        public static Obj fromEntry(@NotNull Map.Entry<QueuePair, PrinterIdentifier> entry) {
             return new Obj(entry.getKey(), entry.getValue());
         }
 
-        public Map.Entry<QueuePair, PrinterSettings> toEntry() {
-            return Map.entry(queuePair, printerSettings);
+        public Map.Entry<QueuePair, PrinterIdentifier> toEntry() {
+            return Map.entry(queuePair, printerIdentifier);
         }
     }
 }

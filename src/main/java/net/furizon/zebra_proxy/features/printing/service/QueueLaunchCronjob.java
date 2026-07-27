@@ -2,6 +2,7 @@ package net.furizon.zebra_proxy.features.printing.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.furizon.zebra_proxy.features.printing.dto.PrinterIdentifier;
 import net.furizon.zebra_proxy.features.printing.dto.QueuePair;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -20,7 +21,7 @@ public class QueueLaunchCronjob {
     @Scheduled(fixedRateString = "${worker.delay}", timeUnit = TimeUnit.SECONDS)
     public void launch() {
         log.info("Launching queue cronjob");
-        List<QueuePair> queues = jobManagementService.getQueues();
+        List<PrinterIdentifier> queues = jobManagementService.getQueues();
         queues.forEach(jobManagementService::runAsync);
     }
 }

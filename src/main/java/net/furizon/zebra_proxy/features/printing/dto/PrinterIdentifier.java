@@ -6,7 +6,7 @@ import org.jetbrains.annotations.NotNull;
 
 @Data
 @Builder
-public class PrinterSettings {
+public class PrinterIdentifier {
     @NotNull
     private String printerName;
 }

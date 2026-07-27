@@ -78,5 +78,7 @@ with open("badgeUsers.html", "r") as f:
 with open("badgeFursuits.html", "r") as f:
     badgeFursuit = f.read()
     
-submitJob(badgeUser, JOB_TYPE_USER)
-#submitJob(badgeFursuit, JOB_TYPE_FURSUIT)
+#submitJob(badgeUser, JOB_TYPE_USER)
+#import time
+#time.sleep(1)
+submitJob(badgeFursuit, JOB_TYPE_FURSUIT)

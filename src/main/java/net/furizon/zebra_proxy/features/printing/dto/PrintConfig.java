@@ -9,5 +9,5 @@ import java.util.Map;
 public class PrintConfig {
     // Operator -> (print type -> printer settings)
     @NotNull
-    private final Map<Long, Map<PrintType, PrinterSettings>> printers;
+    private final Map<Long, Map<PrintType, PrinterIdentifier>> printers;
 }

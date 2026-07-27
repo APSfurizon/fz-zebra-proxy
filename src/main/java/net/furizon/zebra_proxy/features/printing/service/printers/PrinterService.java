@@ -1,7 +1,7 @@
 package net.furizon.zebra_proxy.features.printing.service.printers;
 
 import net.furizon.zebra_proxy.features.printing.dto.PrintIdContentPair;
-import net.furizon.zebra_proxy.features.printing.dto.PrinterSettings;
+import net.furizon.zebra_proxy.features.printing.dto.PrinterIdentifier;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
@@ -11,9 +11,9 @@ import java.util.Set;
 public interface PrinterService {
     @NotNull Set<String> getAvailablePrinters();
 
-    void printPdf(byte[] pdfContent, @NotNull PrintIdContentPair pair, @NotNull PrinterSettings settings);
+    void printPdf(byte[] pdfContent, @NotNull PrintIdContentPair pair, @NotNull PrinterIdentifier settings);
 
-    void queueDone(@NotNull PrinterSettings settings);
+    void queueDone(@NotNull PrinterIdentifier settings);
 
     void closeAll();
 

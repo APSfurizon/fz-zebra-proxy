@@ -3,7 +3,7 @@ package net.furizon.zebra_proxy.features.printing.service;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import net.furizon.zebra_proxy.features.printing.dto.PrinterSettings;
+import net.furizon.zebra_proxy.features.printing.dto.PrinterIdentifier;
 import net.furizon.zebra_proxy.features.printing.dto.QueuePair;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -22,14 +22,14 @@ public class PrintConfigService {
     private static final ReentrantLock MUTEX = new ReentrantLock(true);
 
     @NotNull
-    private final Map<QueuePair, PrinterSettings> printerMap = new HashMap<>();
+    private final Map<QueuePair, PrinterIdentifier> printerMap = new HashMap<>();
 
 
     @NotNull
     private final PrintConfigPersist printConfigPersist;
 
 
-    public @Nullable PrinterSettings getPrinterNamePerQueuePair(@NotNull final QueuePair queuePair) {
+    public @Nullable PrinterIdentifier getPrinterNamePerQueuePair(@NotNull final QueuePair queuePair) {
         try {
             MUTEX.lock();
             return printerMap.get(queuePair);
@@ -47,16 +47,16 @@ public class PrintConfigService {
         }
     }
 
-    public void addConfig(@NotNull QueuePair queuePair, @NotNull PrinterSettings printerSettings) {
+    public void addConfig(@NotNull QueuePair queuePair, @NotNull PrinterIdentifier printerIdentifier) {
         try {
             MUTEX.lock();
-            printerMap.put(queuePair, printerSettings);
+            printerMap.put(queuePair, printerIdentifier);
             printConfigPersist.save(printerMap);
         } finally {
             MUTEX.unlock();
         }
     }
-    public void overrideConfig(@NotNull Map<QueuePair, PrinterSettings> newConfigs) {
+    public void overrideConfig(@NotNull Map<QueuePair, PrinterIdentifier> newConfigs) {
         try {
             MUTEX.lock();
             printerMap.clear();
@@ -66,7 +66,7 @@ public class PrintConfigService {
             MUTEX.unlock();
         }
     }
-    public @NotNull Map<QueuePair, PrinterSettings> getConfig() {
+    public @NotNull Map<QueuePair, PrinterIdentifier> getConfig() {
         try {
             MUTEX.lock();
             return new HashMap<>(printerMap);

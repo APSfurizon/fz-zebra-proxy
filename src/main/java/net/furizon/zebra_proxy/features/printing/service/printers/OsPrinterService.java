@@ -4,7 +4,7 @@ import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.furizon.zebra_proxy.features.printing.dto.PrintIdContentPair;
-import net.furizon.zebra_proxy.features.printing.dto.PrinterSettings;
+import net.furizon.zebra_proxy.features.printing.dto.PrinterIdentifier;
 import net.furizon.zebra_proxy.infrastructure.pdfUtils.FzPDFPageable;
 import net.furizon.zebra_proxy.infrastructure.pdfUtils.PrintingSettingsConfig;
 import org.apache.pdfbox.Loader;
@@ -32,7 +32,7 @@ public class OsPrinterService implements PrinterService {
     private final PrintingSettingsConfig printConfig;
 
     @Override
-    public void printPdf(byte[] pdfContent, @NotNull PrintIdContentPair pair, @NotNull PrinterSettings settings) {
+    public void printPdf(byte[] pdfContent, @NotNull PrintIdContentPair pair, @NotNull PrinterIdentifier settings) {
         try (PDDocument document = Loader.loadPDF(pdfContent)) {
             PrintService printer = findPrintService(settings);
             if (printer == null) {
@@ -52,7 +52,7 @@ public class OsPrinterService implements PrinterService {
     }
 
     @Override
-    public void queueDone(@NotNull PrinterSettings settings) {
+    public void queueDone(@NotNull PrinterIdentifier settings) {
     }
     @Override
     public void closeAll() {
@@ -82,8 +82,8 @@ public class OsPrinterService implements PrinterService {
         return PrintServiceLookup.lookupDefaultPrintService();
     }
 
-    public @Nullable PrintService findPrintService(@NotNull PrinterSettings printerSettings) {
-        return findPrintService(printerSettings.getPrinterName());
+    public @Nullable PrintService findPrintService(@NotNull PrinterIdentifier printerIdentifier) {
+        return findPrintService(printerIdentifier.getPrinterName());
     }
     public @Nullable PrintService findPrintService(@NotNull String printerName) {
         PrintService[] printServices = PrintServiceLookup.lookupPrintServices(null, null);

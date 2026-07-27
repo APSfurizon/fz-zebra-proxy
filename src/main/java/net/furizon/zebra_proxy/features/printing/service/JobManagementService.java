@@ -3,8 +3,9 @@ package net.furizon.zebra_proxy.features.printing.service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.furizon.zebra_proxy.features.printing.dto.PrintIdContentPair;
-import net.furizon.zebra_proxy.features.printing.dto.PrintRequest;
-import net.furizon.zebra_proxy.features.printing.dto.QueuePair;
+import net.furizon.zebra_proxy.features.printing.dto.PrinterIdentifier;
+import net.furizon.zebra_proxy.features.printing.service.printers.PrinterService;
+import org.apache.commons.lang3.tuple.Pair;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -19,58 +20,63 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @RequiredArgsConstructor
 public class JobManagementService {
 
-    private final Map<QueuePair, AtomicBoolean> queuesLocks = new ConcurrentHashMap<>();
-    private final Map<QueuePair, Queue<PrintIdContentPair>> queues = new ConcurrentHashMap<>();
+    private final Map<PrinterIdentifier, AtomicBoolean> queuesLocks = new ConcurrentHashMap<>();
+    private final Map<PrinterIdentifier, Queue<Pair<byte[], PrintIdContentPair>>> queues = new ConcurrentHashMap<>();
 
-    @NotNull
-    private final PrintingService printingService;
-
-    public synchronized @NotNull QueuePair submitJob(@NotNull PrintRequest printRequest) {
-        var pair = printRequest.toQueuePair();
-        var queue = queues.computeIfAbsent(pair, p -> {
+    public synchronized void submitJob(@NotNull PrinterIdentifier printer, @NotNull PrintIdContentPair printId, byte[] printContent) {
+        var queue = queues.computeIfAbsent(printer, p -> {
             getLockForQueue(p);
-            return new ConcurrentLinkedQueue<PrintIdContentPair>();
+            return new ConcurrentLinkedQueue<Pair<byte[], PrintIdContentPair>>();
         });
-        queue.add(printRequest.toIdContentPair());
-        return pair;
+        queue.add(Pair.of(printContent, printId));
+        log.debug("Added job {} to queue {}. Queue length = {}", printId.getPrintId(), printer, queue.size());
     }
 
-    private synchronized @NotNull AtomicBoolean getLockForQueue(@NotNull QueuePair pair) {
-        var ret = queuesLocks.computeIfAbsent(pair, _ -> new AtomicBoolean(false));
+    private synchronized @NotNull AtomicBoolean getLockForQueue(@NotNull PrinterIdentifier printer) {
+        var ret = queuesLocks.computeIfAbsent(printer, _ -> new AtomicBoolean(false));
         return ret;
     }
 
-    public List<QueuePair> getQueues() {
+    public List<PrinterIdentifier> getQueues() {
         return new ArrayList<>(queues.keySet());
     }
 
     @Async
-    public void runAsync(@NotNull QueuePair pair) {
-        run(pair);
+    public void runAsync(@NotNull PrinterIdentifier printer) {
+        run(printer);
     }
-    public void run(@NotNull QueuePair pair) {
-        var queuePair = getLockForQueue(pair);
+    public void run(@NotNull PrinterIdentifier printer) {
+        var queuePair = getLockForQueue(printer);
         boolean isLocked = queuePair.getAndSet(true);
         if (isLocked) {
-            log.debug("Queue {} is already locked", pair);
+            log.debug("Queue {} is already locked", printer);
             return;
         }
-        log.debug("Locked queue {}", pair);
+        log.debug("Locked queue {}", printer);
 
         try {
 
-            var queue = queues.get(pair);
+            var queue = queues.get(printer);
             if (queue == null) {
-                log.warn("Queue {} not found", pair);
+                log.warn("Queue {} not found", printer);
                 return;
             }
-            PrintIdContentPair job;
+            PrinterService printerService = PrinterService.getPrinterService(printer.getPrinterName());
+            Pair<byte[], PrintIdContentPair> job;
+            boolean jobDone = false;
             while ((job = queue.poll()) != null) {
-                printingService.invoke(job, pair);
+                log.debug("Printing job {} of queue {}. Queue length = {}", job.getRight().getPrintId(), printer, queue.size());
+                printerService.printPdf(job.getLeft(), job.getRight(), printer);
+                jobDone = true;
+            }
+            if (jobDone) {
+                log.debug("Queue {} is now empty", printer);
+                printerService.queueDone(printer);
             }
 
+
         } finally {
-            log.debug("Unlocking queue {}", pair);
+            log.debug("Unlocking queue {}", printer);
             queuePair.set(false);
         }
     }

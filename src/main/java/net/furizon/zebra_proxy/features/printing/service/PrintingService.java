@@ -3,7 +3,7 @@ package net.furizon.zebra_proxy.features.printing.service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.furizon.zebra_proxy.features.printing.dto.PrintIdContentPair;
-import net.furizon.zebra_proxy.features.printing.dto.PrinterSettings;
+import net.furizon.zebra_proxy.features.printing.dto.PrinterIdentifier;
 import net.furizon.zebra_proxy.features.printing.dto.QueuePair;
 import net.furizon.zebra_proxy.features.printing.service.printers.PrinterService;
 import net.furizon.zebra_proxy.infrastructure.selenium.WebdriverConfig;
@@ -30,6 +30,9 @@ public class PrintingService {
     @NotNull
     private final WebdriverConfig webdriverConfig;
 
+    @NotNull
+    private final JobManagementService jobManagementService;
+
 
     public synchronized void invoke(@NotNull PrintIdContentPair pair, @NotNull QueuePair queue) {
         log.info("Printing {}", pair);
@@ -39,21 +42,20 @@ public class PrintingService {
             log.error("Failed to export pdf on job {}", pair);
             return;
         }
-        PrinterSettings printerConfig = printConfigService.getPrinterNamePerQueuePair(queue);
-        if (printerConfig == null) {
+        PrinterIdentifier printer = printConfigService.getPrinterNamePerQueuePair(queue);
+        if (printer == null) {
             log.error("Printer config not found for queue {}", queue);
             return;
         }
-        //TODO CHANGE TO QUEUE MANAGER
-        PrinterService printerService = PrinterService.getPrinterService(printerConfig.getPrinterName());
-        printerService.printPdf(pdfContent, pair, printerConfig);
-        log.debug("Printed {}", pair);
+        jobManagementService.submitJob(printer, pair, pdfContent);
+        jobManagementService.runAsync(printer);
     }
 
 
 
-    private byte[] exportToPdf(@NotNull PrintIdContentPair pair) {
+    private synchronized byte[] exportToPdf(@NotNull PrintIdContentPair pair) {
         Path tempHtml = null;
+        long start = System.currentTimeMillis();
         try {
             tempHtml = Files.createTempFile(null, ".html");
             log.debug("Writing temp html to {}", tempHtml);
@@ -88,6 +90,7 @@ public class PrintingService {
                     log.error("IOException while deleting temp file {} for job {}", tempHtml, pair, e);
                 }
             }
+            log.debug("Exported pdf on job {} in {} ms", pair, System.currentTimeMillis() - start);
         }
     }
 }

@@ -23,7 +23,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import net.furizon.zebra_proxy.features.printing.dto.PrintIdContentPair;
-import net.furizon.zebra_proxy.features.printing.dto.PrinterSettings;
+import net.furizon.zebra_proxy.features.printing.dto.PrinterIdentifier;
 import net.furizon.zebra_proxy.features.printing.dto.ZebraPrinterConfig;
 import net.furizon.zebra_proxy.infrastructure.pdfUtils.PrintingSettingsConfig;
 import net.furizon.zebra_proxy.infrastructure.zebraUtils.ZebraUtils;
@@ -69,7 +69,7 @@ public class ZebraService implements PrinterService {
 
     @Override
     @SneakyThrows
-    public void printPdf(byte[] pdfContent, @NotNull PrintIdContentPair pair, @NotNull PrinterSettings settings) {
+    public void printPdf(byte[] pdfContent, @NotNull PrintIdContentPair pair, @NotNull PrinterIdentifier settings) {
         var p = getPrinter(settings);
         ZebraCardPrinter printer = p.getLeft();
         ZebraPrinterConfig config = p.getMiddle();
@@ -265,10 +265,14 @@ public class ZebraService implements PrinterService {
     }
 
     @Override
-    public void queueDone(@NotNull PrinterSettings settings) {
+    public void queueDone(@NotNull PrinterIdentifier settings) {
         try {
             MAP_MUTEX.lock();
-            ZebraPrinterConfig z = printerNameToFullConfig.get(settings.getPrinterName());
+            String name = settings.getPrinterName();
+            if (name.startsWith(ZEBRA_PRINT_NAME_PREPEND)) {
+                name = name.substring(ZEBRA_PRINT_NAME_PREPEND.length());
+            }
+            ZebraPrinterConfig z = printerNameToFullConfig.get(name);
             String ip = z.getIp();
             Triple<Connection, ZebraCardPrinter, PrinterModel> p = ipToOpenPrinters.get(ip);
             close(p, ip);
@@ -287,7 +291,7 @@ public class ZebraService implements PrinterService {
         }
     }
 
-    private @NotNull Triple<ZebraCardPrinter, ZebraPrinterConfig, PrinterModel> getPrinter(@NotNull PrinterSettings settings) throws ConnectionException, SettingsException, ZebraCardException {
+    private @NotNull Triple<ZebraCardPrinter, ZebraPrinterConfig, PrinterModel> getPrinter(@NotNull PrinterIdentifier settings) throws ConnectionException, SettingsException, ZebraCardException {
         try {
             MAP_MUTEX.lock();
             String name = settings.getPrinterName();
@@ -311,6 +315,7 @@ public class ZebraService implements PrinterService {
     private void close(@NotNull Triple<Connection, ZebraCardPrinter, PrinterModel> triple, @NotNull String ip) {
         try {
             MAP_MUTEX.lock();
+            log.info("Closing printer {} at IP {}", triple.getRight(), ip);
             try {
                 triple.getMiddle().destroy();
             } catch (ZebraCardException e) {
@@ -336,7 +341,7 @@ public class ZebraService implements PrinterService {
             PrinterModel printerModel = Objects.requireNonNull(ZebraUtils.getPrinterModel(printer));
             var triple = Triple.of(connection, printer, printerModel);
             ipToOpenPrinters.put(config.getIp(), triple);
-            log.debug("Opened printer {} in {} ms", config.getName(), System.currentTimeMillis() - start);
+            log.debug("Opened printer {} at ip {} in {} ms", config.getName(), config.getIp(), System.currentTimeMillis() - start);
             return triple;
         } finally {
             MAP_MUTEX.unlock();

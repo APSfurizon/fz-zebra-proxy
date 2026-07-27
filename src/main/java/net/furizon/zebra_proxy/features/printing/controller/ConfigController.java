@@ -50,17 +50,17 @@ public class ConfigController {
     @PostMapping("/")
     public void setConfig(@NotNull @Valid @RequestBody PrintConfig config) {
         log.info("Setting new config");
-        Map<QueuePair, PrinterSettings> parsedConfig = new HashMap<>();
-        for (Map.Entry<Long, Map<PrintType, PrinterSettings>> entry : config.getPrinters().entrySet()) {
+        Map<QueuePair, PrinterIdentifier> parsedConfig = new HashMap<>();
+        for (Map.Entry<Long, Map<PrintType, PrinterIdentifier>> entry : config.getPrinters().entrySet()) {
 
             long operatorId = entry.getKey();
             var map = entry.getValue();
 
             for (PrintType printType : PrintType.values()) {
 
-                PrinterSettings printerSettings = map.get(printType);
-                if (printerSettings != null) {
-                    parsedConfig.put(QueuePair.of(operatorId, printType), printerSettings);
+                PrinterIdentifier printerIdentifier = map.get(printType);
+                if (printerIdentifier != null) {
+                    parsedConfig.put(QueuePair.of(operatorId, printType), printerIdentifier);
                 }
             }
         }
@@ -71,10 +71,10 @@ public class ConfigController {
     @GetMapping("/")
     public @NotNull PrintConfig getConfig() {
         log.info("Getting config");
-        Map<Long, Map<PrintType, PrinterSettings>> resMap = new TreeMap<>();
-        Map<QueuePair, PrinterSettings> config = printConfigService.getConfig();
+        Map<Long, Map<PrintType, PrinterIdentifier>> resMap = new TreeMap<>();
+        Map<QueuePair, PrinterIdentifier> config = printConfigService.getConfig();
 
-        for (Map.Entry<QueuePair, PrinterSettings> entry : config.entrySet()) {
+        for (Map.Entry<QueuePair, PrinterIdentifier> entry : config.entrySet()) {
             var pair = entry.getKey();
             var settings = entry.getValue();
 
