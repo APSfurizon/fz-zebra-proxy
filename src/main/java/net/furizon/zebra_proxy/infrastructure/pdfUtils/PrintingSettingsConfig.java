@@ -14,6 +14,7 @@ public class PrintingSettingsConfig {
         private final double width;
         private final double height;
         private final double dpi;
+        private final double supersampling;
         private final boolean invertMediaOrientation;
         private final boolean invertPageformatOrientation;
 

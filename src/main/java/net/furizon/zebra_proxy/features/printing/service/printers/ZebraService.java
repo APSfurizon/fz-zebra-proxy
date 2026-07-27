@@ -8,18 +8,15 @@ import com.zebra.sdk.comm.ConnectionException;
 import com.zebra.sdk.comm.TcpConnection;
 import com.zebra.sdk.common.card.containers.GraphicsInfo;
 import com.zebra.sdk.common.card.containers.JobStatusInfo;
-import com.zebra.sdk.common.card.enumerations.CardSide;
-import com.zebra.sdk.common.card.enumerations.GraphicType;
-import com.zebra.sdk.common.card.enumerations.OrientationType;
-import com.zebra.sdk.common.card.enumerations.PrintType;
+import com.zebra.sdk.common.card.enumerations.*;
 import com.zebra.sdk.common.card.exceptions.ZebraCardException;
-import com.zebra.sdk.common.card.graphics.ZebraCardGraphics;
 import com.zebra.sdk.common.card.graphics.ZebraCardImageI;
-import com.zebra.sdk.common.card.graphics.ZebraGraphics;
-import com.zebra.sdk.common.card.graphics.enumerations.RotationType;
+import com.zebra.sdk.common.card.graphics.containers.internal.ImageAdjustmentLevels;
+import com.zebra.sdk.common.card.graphics.enumerations.PrinterModel;
 import com.zebra.sdk.common.card.jobSettings.ZebraCardJobSettingNames;
 import com.zebra.sdk.common.card.printer.ZebraCardPrinter;
 import com.zebra.sdk.common.card.printer.ZebraCardPrinterFactory;
+import com.zebra.sdk.settings.SettingsException;
 import com.zebra.sdk.zmotif.job.ZebraCardJobSettingNamesZmotif;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -29,20 +26,18 @@ import net.furizon.zebra_proxy.features.printing.dto.PrintIdContentPair;
 import net.furizon.zebra_proxy.features.printing.dto.PrinterSettings;
 import net.furizon.zebra_proxy.features.printing.dto.ZebraPrinterConfig;
 import net.furizon.zebra_proxy.infrastructure.pdfUtils.PrintingSettingsConfig;
-import org.apache.commons.lang3.tuple.Pair;
+import net.furizon.zebra_proxy.infrastructure.zebraUtils.ZebraUtils;
+import org.apache.commons.lang3.tuple.Triple;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
-import org.apache.pdfbox.pdmodel.PDPage;
-import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.rendering.ImageType;
 import org.apache.pdfbox.rendering.PDFRenderer;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.springframework.stereotype.Service;
 
-import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.image.BufferedImage;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -66,7 +61,7 @@ public class ZebraService implements PrinterService {
     private final ObjectMapper objectMapper;
 
     private Map<String, ZebraPrinterConfig> printerNameToFullConfig = Collections.emptyMap();
-    private Map<String, Pair<Connection, ZebraCardPrinter>> ipToOpenPrinters = new HashMap<>();
+    private Map<String, Triple<Connection, ZebraCardPrinter, PrinterModel>> ipToOpenPrinters = new HashMap<>();
     private static final ReentrantLock MAP_MUTEX = new ReentrantLock(true);
 
     @NotNull
@@ -75,36 +70,71 @@ public class ZebraService implements PrinterService {
     @Override
     @SneakyThrows
     public void printPdf(byte[] pdfContent, @NotNull PrintIdContentPair pair, @NotNull PrinterSettings settings) {
-        //Files.write(Paths.get("data/" + pair.getPrintId() + ".pdf"), pdfContent);
-        ZebraCardPrinter printer = getPrinter(settings);
-        ZebraGraphics graphics = new ZebraCardGraphics(printer);
+        var p = getPrinter(settings);
+        ZebraCardPrinter printer = p.getLeft();
+        ZebraPrinterConfig config = p.getMiddle();
+        PrinterModel printerModel = p.getRight();
+
+        RenderingHints renderingHints = new RenderingHints(Map.of(
+                RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC,
+                RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY,
+                RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON
+        ));
+        ImageAdjustmentLevels imgAdjLevels = config.getImgageAdjustmentLevels();
+
+        long startProcess = System.currentTimeMillis();
         try (PDDocument document = Loader.loadPDF(pdfContent)) {
             PDFRenderer renderer = new PDFRenderer(document);
             renderer.setSubsamplingAllowed(false);
-            List<GraphicsInfo> panels = new ArrayList<>(document.getNumberOfPages());
             for (int page = 0; page < document.getNumberOfPages(); page++) {
+                long startRender = System.currentTimeMillis();
 
-                BufferedImage image = renderPageToCard(renderer, document.getPage(page), page);
-                byte[] imageBytes = toBmp(image);
+                BufferedImage image = renderPageToCard(renderer, page, renderingHints);
 
                 int wPx = image.getWidth();
                 int hPx = image.getHeight();
-                if (wPx > hPx) {
-                    setJobSetting(printer, ZebraCardJobSettingNamesZmotif.ORIENTATION_FRONT, "Landscape");
-                } else {
-                    setJobSetting(printer, ZebraCardJobSettingNamesZmotif.ORIENTATION_FRONT, "Portrait");
-                }
-                panels.add(panel(CardSide.Front, PrintType.Color, render(graphics, PrintType.Color, imageBytes, wPx, hPx)));
-                graphics.clear();
+                OrientationType orientation = wPx > hPx ? OrientationType.Landscape : OrientationType.Portrait;
+                applySettings(printer, config, orientation); //Settings are not persistent
+                var panel = List.of(panel(
+                        CardSide.Front,
+                        config,
+                        ZebraUtils.convertToimage(
+                                image,
+                                imgAdjLevels,
+                                printerModel, orientation,
+                                config.getPrintType(), config.getMonochromeConversion(),
+                                renderingHints,
+                                config.getColorProfile()
+                        )
+                ));
+                log.debug("Rendered page {}/{} of {} in {} ms", page, document.getNumberOfPages(), pair.getPrintId(), System.currentTimeMillis() - startRender);
 
-                int jobId = printer.print(1, panels);
-                waitForJob(printer, jobId);
+                Integer jobId = null;
+                try {
+                    jobId = print(printer, panel);
+                } catch (ConnectionException e) {
+                    log.error("Failed to print page {}/{} of {} to printer {}", page, document.getNumberOfPages(), pair.getPrintId(), settings.getPrinterName(), e);
+                    queueDone(settings);
+                    printer = getPrinter(settings).getLeft();
+                    applySettings(printer, config, orientation);
+                    jobId = print(printer, panel);
+                }
+                long startPage = System.currentTimeMillis();
+                if (jobId != null) waitForJob(printer, jobId, pair);
+                log.debug("Printed page {}/{} of {} in {} ms", page, document.getNumberOfPages(), pair.getPrintId(), System.currentTimeMillis() - startPage);
             }
-            graphics.close();
         }
+        log.debug("Printed {} in {} ms", pair.getPrintId(), System.currentTimeMillis() - startProcess);
     }
 
-    private static String waitForJob(ZebraCardPrinter printer, int jobId) throws Exception {
+    private int print(@NotNull ZebraCardPrinter printer, @NotNull List<GraphicsInfo> panels) throws SettingsException, ConnectionException, ZebraCardException {
+        long start = System.currentTimeMillis();
+        int jobId = printer.print(1, panels);
+        log.debug("Launched print in {} ms", System.currentTimeMillis() - start);
+        return jobId;
+    }
+
+    private static String waitForJob(ZebraCardPrinter printer, int jobId, @NotNull PrintIdContentPair pair) throws Exception {
         long feedingSince = System.currentTimeMillis();
         long hardDeadline = feedingSince + JOB_TIMEOUT_MS;
         boolean wasFeeding = false;
@@ -118,7 +148,7 @@ public class ZebraService implements PrinterService {
             int errorCode = job.errorInfo != null ? job.errorInfo.value : 0;
             String errorText = job.errorInfo != null ? job.errorInfo.description : "";
 
-            log.debug("Job {}: {} / {} (Error? Code:{} - Text: {})", jobId, status, position, errorCode, errorText);
+            log.debug("Job {} ({}): {} / {} (Error? Code:{} - Text: {})", jobId, pair.getPrintId(), status, position, errorCode, errorText);
 
             if (cancelled && errorCode > 0) {
                 return null;
@@ -161,21 +191,11 @@ public class ZebraService implements PrinterService {
             Thread.sleep(POLL_INTERVAL_MS);
         }
     }
-    private ZebraCardImageI render(ZebraGraphics graphics, PrintType printType, byte[] imageData, int wPx, int hPx) throws Exception {
-        boolean isPortrait = wPx < hPx;
-        graphics.initialize(wPx, hPx, isPortrait ? OrientationType.Portrait : OrientationType.Landscape, printType, Color.WHITE);
-        graphics.drawImage(imageData, 0, 0, 0, 0, !isPortrait ? RotationType.Rotate90FlipNone : RotationType.RotateNoneFlipNone);
-        return graphics.createImage();
-    }
-    private GraphicsInfo panel(CardSide side, PrintType printType, ZebraCardImageI image) {
-        try {
-            Files.write(Paths.get("data/shit.bmp"), image.getImageData());
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+
+    private @NotNull GraphicsInfo panel(@NotNull CardSide side, @NotNull ZebraPrinterConfig config, @NotNull ZebraCardImageI image) {
         GraphicsInfo info = new GraphicsInfo();
         info.side = side;
-        info.printType = printType;
+        info.printType = config.getPrintType();
         info.graphicType = GraphicType.BMP;
         info.graphicData = image;
         info.xOffset = 0;
@@ -183,9 +203,10 @@ public class ZebraService implements PrinterService {
         info.fillColor = -1;
         info.opacity = 0;
         info.overprint = false;
+        info.preheat = config.getColorPreheat();
         return info;
     }
-    private void applySettings(ZebraCardPrinter printer) {
+    private void applySettings(ZebraCardPrinter printer, @NotNull ZebraPrinterConfig config, @NotNull OrientationType orientation) {
         setJobSetting(printer, ZebraCardJobSettingNames.CARD_SOURCE, "Feeder");
         setJobSetting(printer, ZebraCardJobSettingNames.CARD_DESTINATION, "Eject");
         setJobSetting(printer, ZebraCardJobSettingNames.K_OPTIMIZATION_FRONT, "Mixed");
@@ -195,89 +216,52 @@ public class ZebraService implements PrinterService {
 
         //setJobSetting(printer, ZebraCardJobSettingNamesZmotif.CARD_THICKNESS, String.valueOf(CARD_THICKNESS_MILS));
 
-        setJobSetting(printer, ZebraCardJobSettingNamesZmotif.COLOR_PREHEAT, "0");
-        setJobSetting(printer, ZebraCardJobSettingNamesZmotif.K_PREHEAT_FRONT, "0");
+        setJobSetting(printer, ZebraCardJobSettingNamesZmotif.COLOR_PREHEAT, String.valueOf(config.getColorPreheat()));
+        setJobSetting(printer, ZebraCardJobSettingNamesZmotif.K_PREHEAT_FRONT, String.valueOf(config.getKPreheat()));
+        setJobSetting(printer, ZebraCardJobSettingNamesZmotif.SHARPENING_FRONT, config.getSharpeningLevel().name());
+
+        setJobSetting(printer, ZebraCardJobSettingNamesZmotif.ORIENTATION_FRONT, orientation.name());
     }
     /** Unknown keys are a firmware difference, not a reason to fail the job. */
     private void setJobSetting(@NotNull ZebraCardPrinter printer, @NotNull String name, @NotNull String value) {
         try {
             printer.setJobSetting(name, value);
         } catch (Exception e) {
-            System.err.println("Warning: job setting " + name + "=" + value + " rejected - " + e.getMessage());
+            log.error("Warning: job setting {}={} rejected - {}", name, value, e.getMessage());
         }
     }
-    /** First job setting key containing all the given fragments, or null if there isn't one. */
-    private String findJobSettingKey(@NotNull ZebraCardPrinter printer, String... mustContain) {
-        try {
-            for (String key : printer.getJobSettings()) {
-                String lower = key.toLowerCase();
-                boolean matches = true;
-                for (String fragment : mustContain) {
-                    if (!lower.contains(fragment)) {
-                        matches = false;
-                        break;
-                    }
-                }
-                if (matches) {
-                    return key;
-                }
-            }
-        } catch (Exception e) {
-            System.err.println("Could not read job setting names - " + e.getMessage());
-        }
-        return null;
-    }
 
-    /**
-     * Rasterises one page straight to card size.
-     *
-     * The scale is worked out from the page's CropBox up front, so PDFBox renders once at the
-     * final resolution instead of rendering at a fixed DPI and being resampled afterwards.
-     * Text and vector art are rasterised directly at their output size, and embedded photos go
-     * through one resampling step instead of two.
-     */
-    private BufferedImage renderPageToCard(@NotNull PDFRenderer renderer, @NotNull PDPage page, int pageIndex) throws IOException {
 
-        // Visible area in PDF user space units (1/72 in). PDFBox applies /Rotate during
-        // rendering, so predict the output size against the rotated box.
-        PDRectangle crop = page.getCropBox();
-        float widthPt = crop.getWidth();
-        float heightPt = crop.getHeight();
-        int rotation = page.getRotation();
-        if (rotation == 90 || rotation == 270) {
-            float swap = widthPt;
-            widthPt = heightPt;
-            heightPt = swap;
-        }
-
-        // A portrait page gets turned onto the landscape card, so measure post-rotation.
-        boolean turnSideways = widthPt > heightPt;
-        float fitWidthPt = turnSideways ? heightPt : widthPt;
-        float fitHeightPt = turnSideways ? widthPt : heightPt;
-
+    private BufferedImage renderPageToCard(@NotNull PDFRenderer renderer, int pageIndex, @Nullable RenderingHints renderingHints) throws IOException {
         var conf = printConfig.getCard();
         double dpi = conf.getDpi();
-        float scale = Math.min(conf.widthPx(dpi) / fitWidthPt, conf.heightPx(dpi) / fitHeightPt);
 
-        BufferedImage rendered = renderer.renderImage(pageIndex, scale, ImageType.RGB);
-        //if (turnSideways) {
-        //    BufferedImage out = new BufferedImage(rendered.getHeight(), rendered.getWidth(), BufferedImage.TYPE_INT_RGB);
-        //    Graphics2D g = out.createGraphics();
-        //    try {
-        //        g.translate(rendered.getHeight(), 0);
-        //        g.rotate(Math.PI / 2.0);
-        //        g.drawImage(rendered, 0, 0, null);
-        //        rendered = out;
-        //    } finally {
-        //        g.dispose();
-        //    }
-        //}
-        return rendered;
-    }
-    private byte[] toBmp(@NotNull BufferedImage image) throws IOException {
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        ImageIO.write(image, "bmp", out);
-        return out.toByteArray();
+        BufferedImage rendered = renderer.renderImageWithDPI(pageIndex, (float) (dpi * conf.getSupersampling()), ImageType.RGB);
+
+        int targetW = conf.widthPx(dpi);
+        int targetH = conf.heightPx(dpi);
+        BufferedImage resized = new BufferedImage(targetW, targetH, rendered.getType());
+        Graphics2D g = resized.createGraphics();
+
+        g.setRenderingHints(renderingHints);
+
+        //Match the orientation
+        boolean isTargetHorizontal = targetW > targetH;
+        boolean isSourceHorizontal = rendered.getWidth() > rendered.getHeight();
+
+        if (isSourceHorizontal != isTargetHorizontal) {
+            g.translate(targetW, 0);
+            g.rotate(Math.PI / 2.0);
+
+            int swap = targetW;
+            targetW = targetH;
+            targetH = swap;
+        }
+
+        g.drawImage(rendered, 0, 0, targetW, targetH, null);
+        g.dispose();
+
+        return resized;
     }
 
     @Override
@@ -286,7 +270,7 @@ public class ZebraService implements PrinterService {
             MAP_MUTEX.lock();
             ZebraPrinterConfig z = printerNameToFullConfig.get(settings.getPrinterName());
             String ip = z.getIp();
-            Pair<Connection, ZebraCardPrinter> p = ipToOpenPrinters.get(ip);
+            Triple<Connection, ZebraCardPrinter, PrinterModel> p = ipToOpenPrinters.get(ip);
             close(p, ip);
         } finally {
             MAP_MUTEX.unlock();
@@ -303,7 +287,7 @@ public class ZebraService implements PrinterService {
         }
     }
 
-    private @NotNull ZebraCardPrinter getPrinter(@NotNull PrinterSettings settings) throws ConnectionException {
+    private @NotNull Triple<ZebraCardPrinter, ZebraPrinterConfig, PrinterModel> getPrinter(@NotNull PrinterSettings settings) throws ConnectionException, SettingsException, ZebraCardException {
         try {
             MAP_MUTEX.lock();
             String name = settings.getPrinterName();
@@ -314,26 +298,26 @@ public class ZebraService implements PrinterService {
             if (config == null) {
                 throw new RuntimeException("No printer found with name '" + name + "'");
             }
-            var pair = ipToOpenPrinters.get(config.getIp());
-            if (pair != null) {
-                return pair.getRight();
+            var triple = ipToOpenPrinters.get(config.getIp());
+            if (triple == null) {
+                triple = open(config);
             }
-            return open(config);
+            return Triple.of(triple.getMiddle(), config, triple.getRight());
         } finally {
             MAP_MUTEX.unlock();
         }
     }
 
-    private void close(@NotNull Pair<Connection, ZebraCardPrinter> pair, @NotNull String ip) {
+    private void close(@NotNull Triple<Connection, ZebraCardPrinter, PrinterModel> triple, @NotNull String ip) {
         try {
             MAP_MUTEX.lock();
             try {
-                pair.getRight().destroy();
+                triple.getMiddle().destroy();
             } catch (ZebraCardException e) {
                 e.printStackTrace();
             }
             try {
-                pair.getLeft().close();
+                triple.getLeft().close();
             } catch (ConnectionException e) {
                 e.printStackTrace();
             }
@@ -342,15 +326,18 @@ public class ZebraService implements PrinterService {
             MAP_MUTEX.unlock();
         }
     }
-    private @NotNull ZebraCardPrinter open(@NotNull ZebraPrinterConfig config) throws ConnectionException {
+    private @NotNull Triple<Connection, ZebraCardPrinter, PrinterModel> open(@NotNull ZebraPrinterConfig config) throws ConnectionException, SettingsException, ZebraCardException {
         try {
             MAP_MUTEX.lock();
+            long start = System.currentTimeMillis();
             Connection connection = new TcpConnection(config.getIp(), 9100);
             connection.open();
             ZebraCardPrinter printer = ZebraCardPrinterFactory.getInstance(connection);
-            applySettings(printer);
-            ipToOpenPrinters.put(config.getIp(), Pair.of(connection, printer));
-            return printer;
+            PrinterModel printerModel = Objects.requireNonNull(ZebraUtils.getPrinterModel(printer));
+            var triple = Triple.of(connection, printer, printerModel);
+            ipToOpenPrinters.put(config.getIp(), triple);
+            log.debug("Opened printer {} in {} ms", config.getName(), System.currentTimeMillis() - start);
+            return triple;
         } finally {
             MAP_MUTEX.unlock();
         }

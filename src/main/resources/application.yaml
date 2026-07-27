@@ -56,5 +56,6 @@ print:
     width: ${PRINT_CARD_WIDTH_INCH:2.180} #2.125
     height: ${PRINT_CARD_HEIGHT_INCH:3.460} #3.370
     dpi: ${PRINT_CARD_DPI:300}
+    supersampling: ${PRINT_CARD_SUPERSAMPLING:1.5}
     invert-media-orientation: ${PRINT_CARD_INVERT_MEDIA_ORIENTATION:false}
     invert-pageformat-orientation: ${PRINT_CARD_INVERT_PAGEFORMAT_ORIENTATION:false}
