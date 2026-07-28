@@ -51,6 +51,9 @@ public class InternalBasicFilter extends OncePerRequestFilter {
                 authHeader.replaceFirst("(?i)^Basic ", "")
             );
             final var basicData = new String(decoded, StandardCharsets.UTF_8).split(":");
+            if (basicData.length != 2) {
+                return;
+            }
             final var username = basicData[0];
             final var password = basicData[1];
 
