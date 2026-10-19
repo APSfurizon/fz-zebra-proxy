@@ -189,6 +189,7 @@
                 <version>${spring.boot.version}</version>
 				<configuration>
 					<layout>ZIP</layout>
+					<includeSystemScope>true</includeSystemScope>
 					<excludes>
 						<exclude>
 							<groupId>org.projectlombok</groupId>
